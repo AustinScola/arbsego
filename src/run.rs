@@ -1,25 +1,38 @@
+use crate::lints::{AptCall, CurrentDir};
 pub use crate::run_result::RunResult;
-use crate::Options;
+use crate::{File, FileType, Languages, Lint, Options};
 
 use std::fs;
 use std::path::PathBuf;
 
+use log::debug;
+
 use walkdir::WalkDir;
 
 use tree_sitter::{Language, Node, Parser, Point, Tree, TreeCursor};
-use tree_sitter_bash;
 
 pub fn run(options: Options) -> RunResult {
     let mut errors = 0;
 
     let mut parser = Parser::new();
 
-    let language: Language = tree_sitter_bash::language();
-    parser.set_language(language).unwrap();
+    let languages = Languages::new();
 
-    let bash_files = bash_files(options.paths);
-    for bash_file in bash_files {
-        let source = fs::read_to_string(&bash_file).unwrap();
+    let bash_lints: Vec<Box<dyn Lint>> = vec![Box::new(AptCall {})];
+    let rust_lints: Vec<Box<dyn Lint>> = vec![Box::new(CurrentDir {})];
+    let other_lints: Vec<Box<dyn Lint>> = vec![];
+
+    let files: Vec<File> = files(options.paths)
+        .into_iter()
+        .filter(|file| file.file_type().has_lints())
+        .collect();
+    for file in files {
+        debug!("Linting file \"{:?}\"...", file.path());
+
+        let language: Language = languages.language_from_file_type(file.file_type()).unwrap();
+        parser.set_language(language).unwrap();
+
+        let source = fs::read_to_string(&file).unwrap();
         let source_bytes: &[u8] = source.as_bytes();
 
         let tree: Tree = parser.parse(&source, None).unwrap();
@@ -27,71 +40,51 @@ pub fn run(options: Options) -> RunResult {
         let cursor: TreeCursor = tree.walk();
         let walk: Walk = Walk::from(cursor);
 
+        let lints: &Vec<Box<dyn Lint>> = match file.file_type() {
+            FileType::BashSource => &bash_lints,
+            FileType::RustSource => &rust_lints,
+            FileType::Other => &other_lints,
+        };
+
         for node in walk {
-            if apt_call(&node, source_bytes) {
-                let start: Point = node.start_position();
-                let relative_path = bash_file
-                    .strip_prefix(&options.current_dir)
-                    .unwrap()
-                    .to_string_lossy();
-                println!(
-                    "{}:{},{} error: `apt` call in a Bash script.",
-                    relative_path, start.row, start.column
-                );
-                errors += 1;
+            for lint in lints {
+                if let Some(r#match) = lint.matches(&node, source_bytes) {
+                    let start: Point = node.start_position();
+                    let start_row = start.row;
+                    let start_column = start.column;
+                    let relative_path = file
+                        .path()
+                        .strip_prefix(&options.current_dir)
+                        .unwrap()
+                        .to_string_lossy();
+                    let message = r#match.message();
+                    println!("{relative_path}:{start_row},{start_column} error: {message}");
+                    errors += 1;
+                }
             }
         }
+
+        debug!("Linted file \"{:?}\".", file.path());
     }
 
     RunResult::new(errors)
 }
 
-fn bash_files(paths: Vec<PathBuf>) -> Vec<PathBuf> {
-    let path_iterators = paths.iter().map(|path| {
-        WalkDir::new(path)
+fn files(paths: Vec<PathBuf>) -> Vec<File> {
+    let file_iterators = paths.iter().map(|path| {
+        let files = WalkDir::new(path)
             .into_iter()
-            .filter(|entry| {
-                entry
-                    .as_ref()
-                    .unwrap()
-                    .file_name()
-                    .to_str()
-                    .unwrap()
-                    .ends_with(".sh")
-            })
             .map(|entry| entry.unwrap().path().to_path_buf())
-            .collect()
+            .filter(|path| path.is_file());
+        files.map(File::from).collect()
     });
 
-    path_iterators
-        .reduce(|mut accumulated: Vec<PathBuf>, paths| {
+    file_iterators
+        .reduce(|mut accumulated: Vec<File>, paths| {
             accumulated.extend(paths);
             accumulated
         })
         .unwrap_or_default()
-}
-
-/// Return true if the node is a bash command which calls apt.
-fn apt_call(node: &Node, source: &[u8]) -> bool {
-    if node.kind() != "command" {
-        return false;
-    }
-
-    let name: Node = node.child_by_field_name("name").unwrap();
-    let name = name.utf8_text(source).unwrap();
-
-    if name == "apt" {
-        return true;
-    }
-
-    if name == "sudo" {
-        match node.child_by_field_name("argument") {
-            Some(node) => node.utf8_text(source).unwrap() == "apt",
-            None => false,
-        }
-    } else {
-        false
-    }
 }
 
 struct Walk<'a> {
