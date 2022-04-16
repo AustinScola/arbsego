@@ -48,7 +48,7 @@ pub fn run(options: Options) -> RunResult {
 
         for node in walk {
             for lint in lints {
-                if let Some(r#match) = lint.matches(&node, source_bytes) {
+                if let Some(r#match) = lint.r#match(&node, source_bytes) {
                     let start: Point = node.start_position();
                     let start_row = start.row;
                     let start_column = start.column;

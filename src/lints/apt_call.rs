@@ -10,7 +10,7 @@ impl Lint for AptCall {
     }
 
     /// Return if the node is a bash command which calls apt.
-    fn matches(&self, node: &Node, source: &[u8]) -> Option<Box<dyn Match>> {
+    fn r#match(&self, node: &Node, source: &[u8]) -> Option<Box<dyn Match>> {
         if node.kind() != "command" {
             return None;
         }

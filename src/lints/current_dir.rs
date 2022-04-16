@@ -11,7 +11,7 @@ impl Lint for CurrentDir {
 
     // TODO: Properly resolve the function that is being called in order to _really_ check if the
     // function is `std::env::current_dir`.
-    fn matches(&self, node: &Node, source: &[u8]) -> Option<Box<dyn Match>> {
+    fn r#match(&self, node: &Node, source: &[u8]) -> Option<Box<dyn Match>> {
         if node.kind() != "call_expression" {
             return None;
         }
