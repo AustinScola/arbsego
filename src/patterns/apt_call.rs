@@ -1,16 +1,16 @@
-use crate::{FileType, Lint, Match};
+use crate::{FileType, Match, Pattern};
 
 use tree_sitter::Node;
 
 pub struct AptCall {}
 
-impl Lint for AptCall {
+impl Pattern for AptCall {
     fn file_type(&self) -> FileType {
         FileType::BashSource
     }
 
     /// Return if the node is a bash command which calls apt.
-    fn matches(&self, node: &Node, source: &[u8]) -> Option<Box<dyn Match>> {
+    fn r#match(&self, node: &Node, source: &[u8]) -> Option<Box<dyn Match>> {
         if node.kind() != "command" {
             return None;
         }
@@ -39,6 +39,7 @@ impl Lint for AptCall {
     }
 }
 
+#[derive(Debug, PartialEq)]
 struct AptCallMatch {}
 
 impl Match for AptCallMatch {

@@ -1,6 +1,6 @@
-use crate::lints::{AptCall, CurrentDir};
+use crate::patterns::{BASH_LINTS, OTHER_LINTS, RUST_LINE_IGNORE, RUST_LINTS};
 pub use crate::run_result::RunResult;
-use crate::{File, FileType, Languages, Lint, Options};
+use crate::{File, FileType, Languages, Options, Pattern};
 
 use std::fs;
 use std::path::PathBuf;
@@ -18,10 +18,6 @@ pub fn run(options: Options) -> RunResult {
 
     let languages = Languages::new();
 
-    let bash_lints: Vec<Box<dyn Lint>> = vec![Box::new(AptCall {})];
-    let rust_lints: Vec<Box<dyn Lint>> = vec![Box::new(CurrentDir {})];
-    let other_lints: Vec<Box<dyn Lint>> = vec![];
-
     let files: Vec<File> = files(options.paths)
         .into_iter()
         .filter(|file| file.file_type().has_lints())
@@ -37,20 +33,44 @@ pub fn run(options: Options) -> RunResult {
 
         let tree: Tree = parser.parse(&source, None).unwrap();
 
+        // Determine which lines of the file are ignored.
+        let cursor: TreeCursor = tree.walk();
+        let walk: Walk = Walk::from(cursor);
+        let line_ignore_pattern: Option<&Box<dyn Pattern>> = match file.file_type() {
+            FileType::BashSource => None,
+            FileType::RustSource => Some(&RUST_LINE_IGNORE),
+            FileType::Other => None,
+        };
+        let mut ignored_lines: Vec<usize> = Vec::new();
+        if let Some(line_ignore_pattern) = line_ignore_pattern {
+            for node in walk {
+                if line_ignore_pattern.r#match(&node, source_bytes).is_some() {
+                    let start: Point = node.start_position();
+                    let ignored_line = start.row;
+                    ignored_lines.push(ignored_line);
+                }
+            }
+        }
+
         let cursor: TreeCursor = tree.walk();
         let walk: Walk = Walk::from(cursor);
 
-        let lints: &Vec<Box<dyn Lint>> = match file.file_type() {
-            FileType::BashSource => &bash_lints,
-            FileType::RustSource => &rust_lints,
-            FileType::Other => &other_lints,
+        let lints: &Vec<Box<dyn Pattern>> = match file.file_type() {
+            FileType::BashSource => &BASH_LINTS,
+            FileType::RustSource => &RUST_LINTS,
+            FileType::Other => &OTHER_LINTS,
         };
 
         for node in walk {
             for lint in lints {
-                if let Some(r#match) = lint.matches(&node, source_bytes) {
+                if let Some(r#match) = lint.r#match(&node, source_bytes) {
                     let start: Point = node.start_position();
                     let start_row = start.row;
+
+                    if ignored_lines.contains(&start_row) {
+                        continue;
+                    }
+
                     let start_column = start.column;
                     let relative_path = file
                         .path()

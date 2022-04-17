@@ -30,7 +30,7 @@ fn main() {
     };
     set_up_logging(log_level);
 
-    let current_dir = env::current_dir().unwrap();
+    let current_dir = env::current_dir().unwrap(); // arbsego: ignore
 
     let paths: Vec<PathBuf> = if args.paths.is_empty() {
         vec![current_dir.clone()]
