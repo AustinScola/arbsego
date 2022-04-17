@@ -1,0 +1,65 @@
+name: Rust
+
+on: [push]
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Setup Rust
+        run: curl https://sh.rustup.rs -sSf | sh -s -- -y
+
+      - name: Check that it compiles
+        run: ./scripts/check
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Setup Rust
+        run: curl https://sh.rustup.rs -sSf | sh -s -- -y
+
+      - name: Lint with clippy
+        run: ./scripts/lint
+
+  arbsego:
+    name: Arbsego
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Rust
+        run: curl https://sh.rustup.rs -sSf | sh -s -- -y
+
+      - name: Install Arbsego
+        run: cargo install --git https://github.com/AustinScola/arbsego.git --tag v0.1.0
+
+      - name: Lint using Arbsego
+        run: arbsego
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Setup Rust
+        run: curl https://sh.rustup.rs -sSf | sh -s -- -y
+
+      - name: Check formatting
+        run: ./scripts/format -- --check
