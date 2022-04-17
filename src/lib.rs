@@ -13,11 +13,15 @@ use file::File;
 mod file_type;
 use file_type::FileType;
 
-mod lint;
-use lint::Lint;
-mod lints;
+mod pattern;
+use pattern::Pattern;
+
+mod patterns;
 
 mod r#match;
 use r#match::Match;
 
 mod run_result;
+
+#[macro_use]
+extern crate lazy_static;

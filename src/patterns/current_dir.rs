@@ -1,10 +1,10 @@
-use crate::{FileType, Lint, Match};
+use crate::{FileType, Match, Pattern};
 
 use tree_sitter::Node;
 
 pub struct CurrentDir {}
 
-impl Lint for CurrentDir {
+impl Pattern for CurrentDir {
     fn file_type(&self) -> FileType {
         FileType::RustSource
     }
@@ -37,6 +37,7 @@ impl Lint for CurrentDir {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 struct CurrentDirMatch {}
 
 impl CurrentDirMatch {
